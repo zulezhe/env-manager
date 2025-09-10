@@ -7,18 +7,21 @@
  */
 // System tray implementation for the environment variable manager
 use tauri::{
-    AppHandle, Manager, Runtime, menu::{Menu, MenuItem, PredefinedMenuItem, MenuId},
+    AppHandle, Manager, Runtime, Emitter, menu::{Menu, MenuItem, PredefinedMenuItem, MenuId},
 };
 
 // 创建系统托盘
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     // 创建菜单项
     let toggle_item = MenuItem::new(app, "显示/隐藏", true, None::<MenuId>)?;
+    let settings_item = MenuItem::new(app, "设置", true, None::<MenuId>)?;
     let quit_item = MenuItem::new(app, "退出", true, None::<MenuId>)?;
     
     // 创建菜单
     let menu = Menu::with_items(app, &[
         &toggle_item,
+        &PredefinedMenuItem::separator(app)?,
+        &settings_item,
         &PredefinedMenuItem::separator(app)?,
         &quit_item,
     ])?;
@@ -35,6 +38,10 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::Men
         "显示/隐藏" => {
             // 切换窗口显示状态
             toggle_window_visibility(app);
+        }
+        "设置" => {
+            // 显示窗口并导航到设置页面
+            show_settings_window(app);
         }
         "退出" => {
             // 退出应用
@@ -53,5 +60,15 @@ fn toggle_window_visibility<R: Runtime>(app: &AppHandle<R>) {
             let _ = window.show();
             let _ = window.set_focus();
         }
+    }
+}
+
+// 显示设置窗口
+fn show_settings_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        // 发送事件到前端，切换到设置页面
+        let _ = window.emit("navigate-to-settings", ());
     }
 }

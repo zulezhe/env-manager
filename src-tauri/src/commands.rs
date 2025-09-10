@@ -1,6 +1,8 @@
 // Tauri commands for environment variable management
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::fs;
+use std::path::PathBuf;
 use winreg::RegKey;
 use winreg::enums::*;
 
@@ -495,5 +497,111 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
         }))
     } else {
         Ok(None)
+    }
+}
+
+// 设置相关的数据结构
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppSettings {
+    pub theme: String, // "light", "dark", "system"
+    #[serde(rename = "autoStart")]
+    pub auto_start: bool,
+    #[serde(rename = "showHotkey")]
+    pub show_hotkey: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            theme: "system".to_string(),
+            auto_start: false,
+            show_hotkey: "Ctrl+Shift+E".to_string(),
+        }
+    }
+}
+
+// 获取设置文件路径
+fn get_settings_path() -> Result<PathBuf, String> {
+    let home_dir = std::env::var("APPDATA")
+        .or_else(|_| std::env::var("HOME"))
+        .map_err(|_| "Failed to get home directory")?;
+    let settings_dir = PathBuf::from(home_dir).join("env-manager");
+    
+    // 确保目录存在
+    if !settings_dir.exists() {
+        fs::create_dir_all(&settings_dir)
+            .map_err(|e| format!("Failed to create settings directory: {}", e))?;
+    }
+    
+    Ok(settings_dir.join("settings.json"))
+}
+
+// 获取设置
+#[tauri::command]
+pub async fn get_settings() -> Result<AppSettings, String> {
+    let settings_path = get_settings_path()?;
+    
+    if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read settings file: {}", e))?;
+        
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse settings: {}", e))
+    } else {
+        Ok(AppSettings::default())
+    }
+}
+
+// 保存设置
+#[tauri::command]
+pub async fn save_settings(settings: AppSettings) -> Result<(), String> {
+    let settings_path = get_settings_path()?;
+    
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    
+    fs::write(&settings_path, content)
+        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+    
+    // 如果开机自启设置发生变化，更新注册表
+    update_auto_start(settings.auto_start)?;
+    
+    Ok(())
+}
+
+// 更新开机自启设置
+fn update_auto_start(enable: bool) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let run_key = hkcu.open_subkey_with_flags("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_ALL_ACCESS)
+        .map_err(|e| format!("Failed to open registry key: {}", e))?;
+    
+    let app_name = "EnvManager";
+    
+    if enable {
+        // 获取当前可执行文件路径
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get executable path: {}", e))?;
+        
+        run_key.set_value(app_name, &exe_path.to_string_lossy().to_string())
+            .map_err(|e| format!("Failed to set registry value: {}", e))?;
+    } else {
+        // 删除注册表项（忽略错误，因为可能不存在）
+        let _ = run_key.delete_value(app_name);
+    }
+    
+    Ok(())
+}
+
+// 检查是否已设置开机自启
+#[tauri::command]
+pub async fn check_auto_start() -> Result<bool, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let run_key = hkcu.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run")
+        .map_err(|e| format!("Failed to open registry key: {}", e))?;
+    
+    let app_name = "EnvManager";
+    match run_key.get_value::<String, _>(app_name) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
     }
 }

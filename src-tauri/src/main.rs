@@ -1,3 +1,10 @@
+/*
+ * @Author: oliver
+ * @Date: 2025-09-08 11:34:42
+ * @LastEditors: oliver
+ * @LastEditTime: 2025-09-10 14:59:31
+ * @Description: 
+ */
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -17,6 +24,9 @@ fn main() {
             commands::export_environment_variables,
             commands::import_environment_variables,
             commands::check_for_updates,
+            commands::get_settings,
+            commands::save_settings,
+            commands::check_auto_start,
         ])
         .setup(|app| {
             #[cfg(target_os = "windows")]
