@@ -1,3 +1,10 @@
+/*
+ * @Author: oliver
+ * @Date: 2025-09-08 11:41:08
+ * @LastEditors: oliver
+ * @LastEditTime: 2025-09-10 13:11:37
+ * @Description: 
+ */
 // System tray implementation for the environment variable manager
 use tauri::{
     AppHandle, Manager, Runtime, menu::{Menu, MenuItem, PredefinedMenuItem, MenuId},

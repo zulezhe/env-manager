@@ -3,8 +3,8 @@ export interface EnvironmentVariable {
   name: string;
   value: string;
   type: 'user' | 'system';
-  remark?: string;
-  createdAt: number;
-  updatedAt: number;
+  remark?: string | null;
+  createdAt: string;
+  updatedAt: string;
   isValid: boolean;
 }

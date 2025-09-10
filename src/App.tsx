@@ -1,15 +1,16 @@
 import React from 'react'
-import Header from './components/Header/Header'
 import EnvironmentList from './components/EnvironmentList/EnvironmentList'
+import { ToastProvider } from './components/ui/toast'
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Header />
-      <main className="flex-1 p-6">
-        <EnvironmentList />
-      </main>
-    </div>
+    <ToastProvider>
+      <div className="min-h-screen bg-gray-100">
+        <main className="p-6">
+          <EnvironmentList />
+        </main>
+      </div>
+    </ToastProvider>
   )
 }
 

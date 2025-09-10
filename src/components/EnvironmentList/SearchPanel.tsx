@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../ui/toast';
 
 interface EnvironmentVariable {
   id: string;
@@ -14,6 +15,7 @@ interface EnvironmentVariable {
 
 interface SearchQuery {
   nameKeyword?: string;
+  valueKeyword?: string;
   remarkKeyword?: string;
   types?: string[];
 }
@@ -24,10 +26,10 @@ interface SearchPanelProps {
 }
 
 const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigger }) => {
-  const [nameKeyword, setNameKeyword] = useState('');
-  const [remarkKeyword, setRemarkKeyword] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['user', 'system']);
   const [isSearching, setIsSearching] = useState(false);
+  const { addToast } = useToast();
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,9 +37,10 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigg
     
     try {
       const query: SearchQuery = {
-        nameKeyword: nameKeyword || null,
-        remarkKeyword: remarkKeyword || null,
-        types: selectedTypes.length > 0 ? selectedTypes : null,
+        nameKeyword: keyword || undefined,
+        valueKeyword: keyword || undefined,
+        remarkKeyword: keyword || undefined,
+        types: selectedTypes.length > 0 ? selectedTypes : undefined,
       };
       
       const results = await invoke<EnvironmentVariable[]>('search_environment_variables', {
@@ -48,26 +51,16 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigg
       onSearchResults(results);
     } catch (error) {
       console.error('Search failed:', error);
-      alert('搜索失败: ' + (error as Error).message);
+      addToast({
+         type: 'error',
+         title: '搜索失败',
+         description: (error as Error).message
+       });
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleReset = async () => {
-    setNameKeyword('');
-    setRemarkKeyword('');
-    setSelectedTypes(['user', 'system']);
-    
-    try {
-      // 重置时获取所有环境变量
-      const allVariables = await invoke<EnvironmentVariable[]>('get_environment_variables');
-      onSearchResults(allVariables);
-    } catch (error) {
-      console.error('Failed to reset search:', error);
-      alert('重置搜索失败: ' + (error as Error).message);
-    }
-  };
 
   const handleTypeChange = (type: string) => {
     setSelectedTypes(prev => 
@@ -76,49 +69,33 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigg
         : [...prev, type]
     );
   };
-
-  // 监听刷新触发器，重置搜索状态
-  useEffect(() => {
-    if (refreshTrigger !== undefined && refreshTrigger > 0) {
-      handleReset();
-    }
-  }, [refreshTrigger]);
-
   return (
     <div className="bg-white shadow sm:rounded-lg mb-6">
       <div className="px-4 py-5 sm:p-6">
         <h3 className="text-lg leading-6 font-medium text-gray-900">搜索环境变量</h3>
-        <form className="mt-5 space-y-4" onSubmit={handleSearch}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="name-keyword" className="block text-sm font-medium text-gray-700">
-                名称关键字
+        <form className="mt-5" onSubmit={handleSearch}>
+          <div className="flex flex-wrap items-end gap-4">
+            {/* 搜索关键字 */}
+            <div className="flex-1 min-w-[200px]">
+              <label htmlFor="keyword" className="block text-sm font-medium text-gray-700 mb-1">
+                搜索关键字（名称、值或备注）
               </label>
               <input
                 type="text"
-                id="name-keyword"
-                value={nameKeyword}
-                onChange={(e) => setNameKeyword(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                id="keyword"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="输入名称、值或备注关键字"
+                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </div>
-            <div>
-              <label htmlFor="remark-keyword" className="block text-sm font-medium text-gray-700">
-                备注关键字
-              </label>
-              <input
-                type="text"
-                id="remark-keyword"
-                value={remarkKeyword}
-                onChange={(e) => setRemarkKeyword(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
+            
+            {/* 变量类型 */}
+            <div className="flex-shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 变量类型
               </label>
-              <div className="mt-1 space-y-2">
+              <div className="flex items-center space-x-4 h-10">
                 <label className="inline-flex items-center">
                   <input
                     type="checkbox"
@@ -128,7 +105,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigg
                   />
                   <span className="ml-2 text-sm text-gray-700">用户变量</span>
                 </label>
-                <label className="inline-flex items-center ml-4">
+                <label className="inline-flex items-center">
                   <input
                     type="checkbox"
                     checked={selectedTypes.includes('system')}
@@ -139,22 +116,17 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResults, refreshTrigg
                 </label>
               </div>
             </div>
-          </div>
-          <div className="flex space-x-2 mt-4 sm:mt-0">
-            <button
-              type="submit"
-              disabled={isSearching}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSearching ? '搜索中...' : '搜索'}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              重置
-            </button>
+            
+            {/* 操作按钮 */}
+            <div className="flex space-x-2">
+              <button
+                type="submit"
+                disabled={isSearching}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSearching ? '搜索中...' : '搜索'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

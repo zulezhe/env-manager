@@ -25,8 +25,11 @@ pub struct EnvironmentVariable {
 pub struct SearchQuery {
     #[serde(rename = "nameKeyword")]
     pub name_keyword: Option<String>,
+    #[serde(rename = "valueKeyword")]
+    pub value_keyword: Option<String>,
     #[serde(rename = "remarkKeyword")]
     pub remark_keyword: Option<String>,
+    pub types: Option<Vec<String>>,
     #[serde(rename = "dateRange")]
     pub date_range: Option<DateRange>,
 }
@@ -183,6 +186,65 @@ pub async fn delete_environment_variable(id: String) -> Result<(), String> {
     result
 }
 
+// 获取所有环境变量的映射表（用于变量引用解析）
+fn get_all_env_vars_map() -> Result<std::collections::HashMap<String, String>, String> {
+    use std::collections::HashMap;
+    
+    let mut env_map = HashMap::new();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    
+    // 读取用户环境变量
+    if let Ok(hkcu_env) = hkcu.open_subkey("Environment") {
+        for result in hkcu_env.enum_values() {
+            if let Ok((name, value)) = result {
+                env_map.insert(name.to_uppercase(), value.to_string());
+            }
+        }
+    }
+    
+    // 读取系统环境变量（系统变量优先级更高）
+    if let Ok(hklm_env) = hklm.open_subkey(
+        "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"
+    ) {
+        for result in hklm_env.enum_values() {
+            if let Ok((name, value)) = result {
+                env_map.insert(name.to_uppercase(), value.to_string());
+            }
+        }
+    }
+    
+    Ok(env_map)
+}
+
+// 展开环境变量引用（如%JAVA_HOME%）
+fn expand_env_references(value: &str, env_map: &std::collections::HashMap<String, String>) -> String {
+    use regex::Regex;
+    
+    let re = Regex::new(r"%([^%]+)%").unwrap();
+    let mut expanded = value.to_string();
+    
+    // 最多展开5层嵌套引用，避免无限循环
+    for _ in 0..5 {
+        let mut changed = false;
+        expanded = re.replace_all(&expanded, |caps: &regex::Captures| {
+            let var_name = caps.get(1).unwrap().as_str().to_uppercase();
+            if let Some(var_value) = env_map.get(&var_name) {
+                changed = true;
+                var_value.clone()
+            } else {
+                caps.get(0).unwrap().as_str().to_string() // 保持原样
+            }
+        }).to_string();
+        
+        if !changed {
+            break;
+        }
+    }
+    
+    expanded
+}
+
 // 验证环境变量
 #[tauri::command]
 pub async fn validate_environment_variable(id: String) -> Result<bool, String> {
@@ -221,20 +283,52 @@ pub async fn validate_environment_variable(id: String) -> Result<bool, String> {
         }
     };
     
+    // 获取所有环境变量用于引用解析
+    let env_map = get_all_env_vars_map()?;
+    
     // 根据变量名进行特定验证
     let is_valid = if name == "PATH" {
         // 验证PATH变量中的每个路径
         let paths: Vec<&str> = value.split(';').collect();
-        paths.iter().all(|path| {
+        let mut valid_count = 0;
+        let mut total_count = 0;
+        
+        for path in paths.iter() {
             // 空路径跳过验证
-            if path.is_empty() {
-                return true;
+            if path.trim().is_empty() {
+                continue;
             }
-            Path::new(path).exists()
-        })
-    } else if name.ends_with("_HOME") || value.contains("\\") {
-        // 对于可能指向目录的变量进行验证
-        Path::new(&value).exists()
+            total_count += 1;
+            
+            // 展开环境变量引用
+            let expanded_path = expand_env_references(path.trim(), &env_map);
+            let path_obj = Path::new(&expanded_path);
+            
+            // 检查路径是否存在且可访问
+            if path_obj.exists() {
+                // 进一步检查是否可读取（可访问）
+                if let Ok(metadata) = path_obj.metadata() {
+                    if metadata.is_dir() {
+                        valid_count += 1;
+                    }
+                }
+            }
+        }
+        
+        // 如果没有路径或者至少有一半路径有效，则认为有效
+        total_count == 0 || (valid_count as f64 / total_count as f64) >= 0.5
+    } else if name.ends_with("_HOME") || name.ends_with("_DIR") || name.ends_with("_PATH") || value.contains("\\") || value.contains("/") {
+        // 对于可能指向目录或文件的变量进行验证
+        // 展开环境变量引用
+        let expanded_value = expand_env_references(&value, &env_map);
+        let path_obj = Path::new(&expanded_value);
+        path_obj.exists() && {
+            // 检查是否可访问
+            match path_obj.metadata() {
+                Ok(_) => true,
+                Err(_) => false,
+            }
+        }
     } else {
         // 其他变量默认为有效
         true
@@ -249,10 +343,17 @@ pub async fn search_environment_variables(query: SearchQuery) -> Result<Vec<Envi
     let all_variables = get_environment_variables().await?;
     
     let filtered_variables = all_variables.into_iter().filter(|var| {
+        // 名称匹配
         let name_match = query.name_keyword.as_ref()
             .map(|keyword| var.name.to_lowercase().contains(&keyword.to_lowercase()))
             .unwrap_or(true);
+        
+        // 值匹配
+        let value_match = query.value_keyword.as_ref()
+            .map(|keyword| var.value.to_lowercase().contains(&keyword.to_lowercase()))
+            .unwrap_or(true);
             
+        // 备注匹配
         let remark_match = query.remark_keyword.as_ref()
             .map(|keyword| {
                 var.remark.as_ref()
@@ -260,8 +361,20 @@ pub async fn search_environment_variables(query: SearchQuery) -> Result<Vec<Envi
                     .unwrap_or(false)
             })
             .unwrap_or(true);
+        
+        // 类型匹配
+        let type_match = query.types.as_ref()
+            .map(|types| types.contains(&var.var_type))
+            .unwrap_or(true);
+        
+        // 关键字匹配（名称或值匹配任一即可）
+        let keyword_match = if query.name_keyword.is_some() || query.value_keyword.is_some() {
+            name_match || value_match
+        } else {
+            true
+        };
             
-        name_match && remark_match
+        keyword_match && remark_match && type_match
     }).collect();
     
     Ok(filtered_variables)

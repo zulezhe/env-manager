@@ -1,0 +1,38 @@
+.path-children-enter {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+}
+
+.path-children-enter-active {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.path-children-exit {
+  max-height: 1000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in, opacity 0.2s ease-in;
+}
+
+.path-children-exit-active {
+  max-height: 0;
+  opacity: 0;
+}
+
+.path-children {
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out;
+}
+
+.path-children-expanded {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.path-children-collapsed {
+  max-height: 0;
+  opacity: 0;
+}
