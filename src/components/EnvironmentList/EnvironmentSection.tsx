@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { EnvironmentVariable } from '../../utils/types';
 import EnvironmentVariableItem from './EnvironmentVariableItem';
+import './PathAnimation.css';
 
 interface EnvironmentSectionProps {
   title: string;
@@ -77,7 +78,29 @@ const EnvironmentSection: React.FC<EnvironmentSectionProps> = ({
           {sectionVariables.map((variable) => {
             const isPathChild = variable.parentName && isPathVariable(allVariables.find(v => v.name === variable.parentName) || {} as EnvironmentVariable);
             const parentVariable = isPathChild ? allVariables.find(v => v.name === variable.parentName) : null;
-            const isExpanded = parentVariable ? expandedPathVariables.has(parentVariable.id) : true;
+            const isExpanded = isPathChild && parentVariable ? expandedPathVariables.has(parentVariable.id) : true;
+            
+            // PATH子节点使用动画容器
+            if (isPathChild) {
+              return (
+                <div 
+                  key={variable.id}
+                  className={`path-children ${
+                    isExpanded ? 'path-children-expanded' : 'path-children-collapsed'
+                  }`}
+                >
+                  <EnvironmentVariableItem
+                    variable={variable}
+                    isExpanded={isExpanded}
+                    expandedPathVariables={expandedPathVariables}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onTogglePathVariable={onTogglePathVariable}
+                    confirmDelete={confirmDelete}
+                  />
+                </div>
+              );
+            }
             
             return (
               <EnvironmentVariableItem
@@ -91,7 +114,8 @@ const EnvironmentSection: React.FC<EnvironmentSectionProps> = ({
                 confirmDelete={confirmDelete}
               />
             );
-          })}
+          })
+          }
         </ul>
       )}
     </div>

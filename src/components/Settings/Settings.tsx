@@ -18,7 +18,7 @@ interface SettingsData {
 }
 
 const Settings: React.FC = () => {
-  const { toast } = useToast();
+  const { addToast } = useToast();
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<SettingsData>({
     theme: 'system',
@@ -88,16 +88,17 @@ const Settings: React.FC = () => {
       }
       
       setSettings(newSettings);
-      toast({
+      addToast({
+        type: 'success',
         title: '设置已保存',
         description: '所有设置已成功保存',
       });
     } catch (error) {
       console.error('Failed to save settings:', error);
-      toast({
+      addToast({
+        type: 'error',
         title: '保存失败',
         description: '无法保存设置，请重试',
-        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -120,16 +121,17 @@ const Settings: React.FC = () => {
       
       setSettings(updatedSettings);
       setTheme(newTheme); // 更新主题上下文
-      toast({
+      addToast({
+        type: 'success',
         title: '主题已更新',
         description: `已切换到${newTheme === 'light' ? '亮色' : newTheme === 'dark' ? '暗色' : '跟随系统'}主题`,
       });
     } catch (error) {
       console.error('保存主题设置失败:', error);
-      toast({
+      addToast({
+        type: 'error',
         title: '保存失败',
         description: '无法保存主题设置',
-        variant: 'destructive',
       });
     }
   };

@@ -17,20 +17,18 @@ import { invoke } from '@tauri-apps/api/core';
 import { mockInvoke } from '../../utils/mockData';
 
 // 声明全局类型
-declare global {
-  interface Window {
-    __TAURI__: any;
-  }
-}
 
-// 在浏览器环境中使用模拟数据
+
+// 直接使用Tauri的invoke函数获取真实环境变量
 const safeInvoke = async (command: string, args?: any) => {
-  // 检查是否在Tauri环境中
-  if (typeof window !== 'undefined' && window.__TAURI__ && window.__TAURI__.invoke) {
-    return window.__TAURI__.invoke(command, args);
+  try {
+    // 优先使用Tauri的invoke函数
+    return await invoke(command, args);
+  } catch (error) {
+    console.error('Tauri invoke failed, falling back to mock data:', error);
+    // 如果Tauri调用失败，则使用模拟数据作为后备
+    return mockInvoke(command, args);
   }
-  // 否则使用模拟数据
-  return mockInvoke(command, args);
 };
 
 const EnvironmentList: React.FC = () => {
@@ -61,9 +59,9 @@ const EnvironmentList: React.FC = () => {
     } catch (error) {
       console.error('Failed to load environment variables:', error);
       addToast({
+        type: 'error',
         title: '加载失败',
         description: '无法加载环境变量列表',
-        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -74,9 +72,9 @@ const EnvironmentList: React.FC = () => {
     setVariables(results);
   };
 
-  const isPathVariable = (variable: EnvironmentVariable) => {
+  const isPathVariable = (variable: EnvironmentVariable): boolean => {
     const pathVariableNames = ['PATH', 'CLASSPATH', 'PYTHONPATH', 'PYTHON_PATH', 'PATHEXT'];
-    return variable?.name && pathVariableNames.includes(variable.name.toUpperCase()) && variable.value?.includes(';');
+    return !!(variable?.name && pathVariableNames.includes(variable.name.toUpperCase()) && variable.value?.includes(';'));
   };
 
   // 更新filteredVariables为展开后的变量
@@ -98,8 +96,8 @@ const EnvironmentList: React.FC = () => {
           type: variable.type,
           remark: variable.remark,
           parentName: variable.name,
-          createdAt: variable.createdAt,
-          updatedAt: variable.updatedAt,
+          createdAt: variable.createdAt || '',
+          updatedAt: variable.updatedAt || '',
           isValid: variable.isValid
         }));
         acc.push(...pathItems);
@@ -118,10 +116,36 @@ const EnvironmentList: React.FC = () => {
   };
 
   const handleEdit = (id: string) => {
-    const variable = variables.find(v => v.id === id);
-    if (variable) {
-      setEditingVariable(variable);
-      setIsEditDialogOpen(true);
+    // 检查是否是PATH子节点
+    if (id.includes('_path_')) {
+      // 对于PATH子节点，创建一个只包含当前路径值的临时变量
+      const parentId = id.split('_path_')[0];
+      const pathIndex = parseInt(id.split('_path_')[1]);
+      const parentVariable = variables.find(v => v.id === parentId);
+      
+      if (parentVariable) {
+        const paths = parentVariable.value.split(';').filter(path => path.trim() !== '');
+        const currentPath = paths[pathIndex] || '';
+        
+        // 创建临时变量对象，只包含当前路径值
+        const tempVariable = {
+          ...parentVariable,
+          id: id, // 使用子节点ID
+          name: `${parentVariable.name} - 路径项 ${pathIndex + 1}`,
+          value: currentPath.trim(),
+          remark: `PATH变量中的第 ${pathIndex + 1} 个路径项`
+        };
+        
+        setEditingVariable(tempVariable);
+        setIsEditDialogOpen(true);
+      }
+    } else {
+      // 普通变量直接编辑
+      const variable = variables.find(v => v.id === id);
+      if (variable) {
+        setEditingVariable(variable);
+        setIsEditDialogOpen(true);
+      }
     }
   };
 
@@ -129,16 +153,45 @@ const EnvironmentList: React.FC = () => {
     if (!editingVariable) return;
 
     try {
-      await safeInvoke('update_environment_variable', {
-        id: editingVariable.id,
-        variable: updatedVariable
-      });
+      // 检查是否是PATH子节点的编辑
+      if (editingVariable.id.includes('_path_')) {
+        // PATH子节点编辑：更新父变量中的特定路径项
+        const parentId = editingVariable.id.split('_path_')[0];
+        const pathIndex = parseInt(editingVariable.id.split('_path_')[1]);
+        const parentVariable = variables.find(v => v.id === parentId);
+        
+        if (parentVariable) {
+          const paths = parentVariable.value.split(';').filter(path => path.trim() !== '');
+          paths[pathIndex] = updatedVariable.value.trim();
+          
+          // 更新父变量
+          await safeInvoke('update_environment_variable', {
+            id: parentId,
+            variable: {
+              ...parentVariable,
+              value: paths.join(';')
+            }
+          });
+          
+          addToast({
+            type: 'success',
+            title: '更新成功',
+            description: `PATH路径项已更新`,
+          });
+        }
+      } else {
+        // 普通变量编辑
+        await safeInvoke('update_environment_variable', {
+          id: editingVariable.id,
+          variable: updatedVariable
+        });
 
-      addToast({
-        title: '更新成功',
-        description: `环境变量 "${updatedVariable.name}" 已更新`,
-        variant: 'default',
-      });
+        addToast({
+          type: 'success',
+          title: '更新成功',
+          description: `环境变量 "${updatedVariable.name}" 已更新`,
+        });
+      }
 
       setIsEditDialogOpen(false);
       setEditingVariable(null);
@@ -146,9 +199,9 @@ const EnvironmentList: React.FC = () => {
     } catch (error) {
       console.error('Failed to update environment variable:', error);
       addToast({
+        type: 'error',
         title: '更新失败',
         description: '无法更新环境变量',
-        variant: 'destructive',
       });
     }
   };
@@ -168,17 +221,17 @@ const EnvironmentList: React.FC = () => {
     try {
       await safeInvoke('delete_environment_variable', { id: deleteId });
       addToast({
+        type: 'success',
         title: '删除成功',
         description: '环境变量已删除',
-        variant: 'default',
       });
       loadEnvironmentVariables();
     } catch (error) {
       console.error('Failed to delete environment variable:', error);
       addToast({
+        type: 'error',
         title: '删除失败',
         description: '无法删除环境变量',
-        variant: 'destructive',
       });
     } finally {
       setDeleteId(null);
@@ -196,25 +249,26 @@ const EnvironmentList: React.FC = () => {
         setInvalidVariables(invalidVars);
         setShowInvalidDialog(true);
         addToast({
+          type: 'error',
           title: '验证完成',
           description: `发现 ${invalidVars.length} 个无效的环境变量`,
-          variant: 'destructive',
         });
       } else {
         addToast({
+          type: 'success',
           title: '验证完成',
           description: '所有环境变量都是有效的',
-          variant: 'default',
         });
       }
 
-      setVariables(result);
+      // 验证完成后重新加载真实的环境变量数据，而不是使用验证结果
+      await loadEnvironmentVariables();
     } catch (error) {
       console.error('Failed to validate environment variables:', error);
       addToast({
+        type: 'error',
         title: '验证失败',
         description: '无法验证环境变量',
-        variant: 'destructive',
       });
     } finally {
       setIsValidating(false);
@@ -256,9 +310,9 @@ const EnvironmentList: React.FC = () => {
       );
 
       addToast({
+        type: 'success',
         title: '删除成功',
         description: `已删除 ${selectedIds.length} 个无效的环境变量`,
-        variant: 'default',
       });
 
       setShowInvalidDialog(false);
@@ -266,9 +320,9 @@ const EnvironmentList: React.FC = () => {
     } catch (error) {
       console.error('Failed to delete invalid variables:', error);
       addToast({
+        type: 'error',
         title: '删除失败',
         description: '无法删除无效的环境变量',
-        variant: 'destructive',
       });
     }
   };
@@ -297,7 +351,12 @@ const EnvironmentList: React.FC = () => {
               onImportSuccess={loadEnvironmentVariables}
             />
           </div>
-          <div className="h-96 min-h-48 max-h-screen overflow-y-auto resize-y" style={{ resize: 'vertical' }}>
+          <div className="overflow-y-auto resize-y" style={{ 
+            resize: 'vertical',
+            height: 'calc(100vh - 280px)',
+            minHeight: '300px',
+            maxHeight: 'calc(100vh - 200px)'
+          }}>
             {filteredVariables.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 {isLoading ? '正在加载环境变量...' : '暂无环境变量'}

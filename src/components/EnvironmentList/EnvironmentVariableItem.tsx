@@ -36,7 +36,7 @@ const EnvironmentVariableItem: React.FC<EnvironmentVariableItemProps> = ({
   return (
     <li 
       className={variable.parentName 
-        ? `px-8 py-2 bg-gray-50 border-l-2 border-blue-200 path-children ${isExpanded ? 'path-children-expanded' : 'path-children-collapsed'} sm:px-6` 
+        ? 'px-8 py-2 bg-gray-50 border-l-2 border-blue-200 sm:px-6' 
         : 'px-4 py-4 sm:px-6'}
     >
       <div 
@@ -82,9 +82,9 @@ const EnvironmentVariableItem: React.FC<EnvironmentVariableItemProps> = ({
           {variable.isPathParent ? (
             <div className="flex items-center">
               {expandedPathVariables.has(variable.id) ? (
-                <ChevronUp className="h-4 w-4 text-gray-600 transition-transform duration-200" />
-              ) : (
                 <ChevronDown className="h-4 w-4 text-gray-600 transition-transform duration-200" />
+              ) : (
+                <ChevronUp className="h-4 w-4 text-gray-600 transition-transform duration-200" />
               )}
             </div>
           ) : (

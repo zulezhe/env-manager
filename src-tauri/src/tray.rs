@@ -2,7 +2,7 @@
  * @Author: oliver
  * @Date: 2025-09-08 11:41:08
  * @LastEditors: oliver
- * @LastEditTime: 2025-09-10 13:11:37
+ * @LastEditTime: 2025-09-14 22:11:13
  * @Description: 
  */
 // System tray implementation for the environment variable manager

@@ -244,6 +244,12 @@ export const mockInvoke = async (command: string, args?: any): Promise<any> => {
 if (typeof window !== 'undefined') {
   // 模拟Tauri环境
   window.__TAURI__ = {
-    invoke: mockInvoke
+    invoke: mockInvoke,
+    event: {
+      listen: async (event: string, handler: (event: any) => void) => {
+        // 模拟事件监听，返回取消监听的函数
+        return () => {};
+      }
+    }
   };
 }
