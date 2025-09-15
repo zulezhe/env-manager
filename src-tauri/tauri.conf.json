@@ -1,6 +1,6 @@
 {
   "productName": "env-manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "com.env-manager.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -23,8 +23,20 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
-    "icon": []
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "identifier": "com.env-manager.app",
+    "publisher": "Environment Manager",
+    "category": "Utility",
+    "shortDescription": "环境变量管理器",
+    "longDescription": "一个基于 Tauri 构建的现代化 Windows 桌面应用程序，用于管理系统环境变量。",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }

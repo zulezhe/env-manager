@@ -1,3 +1,10 @@
+/*
+ * @Author: oliver
+ * @Date: 2025-09-08 11:31:49
+ * @LastEditors: oliver
+ * @LastEditTime: 2025-09-10 17:03:08
+ * @Description: 
+ */
 import React, { useState, useEffect } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import EnvironmentList from './components/EnvironmentList/EnvironmentList'
