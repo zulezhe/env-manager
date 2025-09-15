@@ -8,8 +8,8 @@ interface EnvironmentVariable {
   value: string;
   type: 'user' | 'system';
   remark?: string;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: string;
+  updatedAt: string;
   isValid: boolean;
 }
 

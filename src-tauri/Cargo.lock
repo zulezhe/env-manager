@@ -739,6 +739,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-shell",
+ "winapi",
  "winreg 0.50.0",
 ]
 

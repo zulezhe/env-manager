@@ -12,21 +12,21 @@ interface InvalidVariablesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invalidVariables: EnvironmentVariable[];
-  onBatchDeleteInvalid: (selectedIds: string[]) => void;
+  onBatchDelete: (selectedIds: string[]) => void;
 }
 
 const InvalidVariablesDialog: React.FC<InvalidVariablesDialogProps> = ({
   open,
   onOpenChange,
   invalidVariables,
-  onBatchDeleteInvalid,
+  onBatchDelete,
 }) => {
   const handleDeleteSelected = () => {
     const checkboxes = document.querySelectorAll('input[id^="invalid-"]:checked');
     const selectedIds = Array.from(checkboxes).map(cb => 
       (cb as HTMLInputElement).id.replace('invalid-', '')
     );
-    onBatchDeleteInvalid(selectedIds);
+    onBatchDelete(selectedIds);
   };
 
   return (

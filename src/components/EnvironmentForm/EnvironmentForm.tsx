@@ -10,6 +10,8 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '../ui/select';
+import { open } from '@tauri-apps/plugin-dialog';
+import { FolderOpen } from 'lucide-react';
 
 interface EnvironmentFormProps {
   variable?: EnvironmentVariable;
@@ -22,6 +24,22 @@ const EnvironmentForm: React.FC<EnvironmentFormProps> = ({ variable, onSubmit, o
   const [value, setValue] = useState(variable?.value || '');
   const [type, setType] = useState<'user' | 'system'>(variable?.type || 'user');
   const [remark, setRemark] = useState(variable?.remark || '');
+
+  const handleSelectFolder = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: '选择文件夹路径'
+      });
+      
+      if (selected && typeof selected === 'string') {
+        setValue(selected);
+      }
+    } catch (error) {
+      console.error('选择文件夹失败:', error);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,12 +70,24 @@ const EnvironmentForm: React.FC<EnvironmentFormProps> = ({ variable, onSubmit, o
           
           <div className="space-y-2">
             <Label htmlFor="value">值</Label>
-            <Input
-              id="value"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              required
-            />
+            <div className="flex space-x-2">
+              <Input
+                id="value"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                required
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSelectFolder}
+                className="px-3"
+              >
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           
           <div className="space-y-2">

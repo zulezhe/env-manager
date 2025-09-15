@@ -153,11 +153,17 @@ pub async fn update_environment_variable(id: String, variable: EnvironmentVariab
 pub async fn delete_environment_variable(id: String) -> Result<(), String> {
     let parts: Vec<&str> = id.split('_').collect();
     if parts.len() < 2 {
-        return Err("Invalid ID format".to_string());
+        return Err("无效的ID格式".to_string());
     }
     
     let var_type = parts[0];
     let name = &id[parts[0].len() + 1..];
+    
+    // 检查是否为受保护的系统变量
+    let protected_vars = ["PATH", "PATHEXT", "TEMP", "TMP", "WINDIR", "SYSTEMROOT", "PROGRAMFILES", "PROGRAMFILES(X86)"];
+    if var_type == "system" && protected_vars.contains(&name.to_uppercase().as_str()) {
+        return Err(format!("无法删除受保护的系统环境变量: {}", name));
+    }
     
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -167,21 +173,92 @@ pub async fn delete_environment_variable(id: String) -> Result<(), String> {
             "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
             KEY_SET_VALUE,
         );
-        if let Ok(env_key) = env_key {
-            env_key.delete_value(name)
-                .map_err(|e| format!("Failed to delete system environment variable: {}", e))?;
-            Ok(())
-        } else {
-            Err("Failed to open system environment key".to_string())
+        match env_key {
+            Ok(env_key) => {
+                match env_key.delete_value(name) {
+                    Ok(_) => {
+                        // 通知系统环境变量已更改
+                        unsafe {
+                            use winapi::um::winuser::{SendMessageTimeoutW, HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG};
+                            use winapi::um::winnt::LPCWSTR;
+                            use std::ffi::OsStr;
+                            use std::os::windows::ffi::OsStrExt;
+                            
+                            let env_str: Vec<u16> = OsStr::new("Environment")
+                                .encode_wide()
+                                .chain(std::iter::once(0))
+                                .collect();
+                            
+                            SendMessageTimeoutW(
+                                HWND_BROADCAST,
+                                WM_SETTINGCHANGE,
+                                0,
+                                env_str.as_ptr() as isize,
+                                SMTO_ABORTIFHUNG,
+                                5000,
+                                std::ptr::null_mut(),
+                            );
+                        }
+                        Ok(())
+                    },
+                    Err(e) => {
+                        let error_msg = match e.kind() {
+                            std::io::ErrorKind::PermissionDenied => "权限不足，请以管理员身份运行程序".to_string(),
+                            std::io::ErrorKind::NotFound => format!("环境变量 '{}' 不存在", name),
+                            _ => format!("删除系统环境变量失败: {}", e)
+                        };
+                        Err(error_msg)
+                    }
+                }
+            },
+            Err(e) => {
+                let error_msg = match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => "权限不足，无法访问系统环境变量，请以管理员身份运行程序".to_string(),
+                    _ => "无法打开系统环境变量注册表项".to_string()
+                };
+                Err(error_msg)
+            }
         }
     } else {
         let env_key = hkcu.open_subkey_with_flags("Environment", KEY_SET_VALUE);
-        if let Ok(env_key) = env_key {
-            env_key.delete_value(name)
-                .map_err(|e| format!("Failed to delete user environment variable: {}", e))?;
-            Ok(())
-        } else {
-            Err("Failed to open user environment key".to_string())
+        match env_key {
+            Ok(env_key) => {
+                match env_key.delete_value(name) {
+                    Ok(_) => {
+                        // 通知系统环境变量已更改
+                        unsafe {
+                            use winapi::um::winuser::{SendMessageTimeoutW, HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG};
+                            use winapi::um::winnt::LPCWSTR;
+                            use std::ffi::OsStr;
+                            use std::os::windows::ffi::OsStrExt;
+                            
+                            let env_str: Vec<u16> = OsStr::new("Environment")
+                                .encode_wide()
+                                .chain(std::iter::once(0))
+                                .collect();
+                            
+                            SendMessageTimeoutW(
+                                HWND_BROADCAST,
+                                WM_SETTINGCHANGE,
+                                0,
+                                env_str.as_ptr() as isize,
+                                SMTO_ABORTIFHUNG,
+                                5000,
+                                std::ptr::null_mut(),
+                            );
+                        }
+                        Ok(())
+                    },
+                    Err(e) => {
+                        let error_msg = match e.kind() {
+                            std::io::ErrorKind::NotFound => format!("环境变量 '{}' 不存在", name),
+                            _ => format!("删除用户环境变量失败: {}", e)
+                        };
+                        Err(error_msg)
+                    }
+                }
+            },
+            Err(_) => Err("无法打开用户环境变量注册表项".to_string())
         }
     };
     
