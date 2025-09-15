@@ -8,12 +8,7 @@ on:
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +16,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -31,20 +31,14 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-20.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
-
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Sync version
-        run: npm run sync-version
+        run: pnpm run sync-version
 
       - name: Build frontend
-        run: npm run build
+        run: pnpm run build
 
   release:
     needs: test
@@ -60,7 +54,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -77,22 +76,22 @@ jobs:
         id: version
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
-          echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "tag=v$version" >> $env:GITHUB_OUTPUT
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Check if tag exists
         id: tag_check
         run: |
           $tagExists = git tag -l "v${{ steps.version.outputs.version }}"
           if ($tagExists) {
-            echo "exists=true" >> $env:GITHUB_OUTPUT
+            "exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           } else {
-            echo "exists=false" >> $env:GITHUB_OUTPUT
+            "exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           }
 
       - name: Build Tauri app
         if: steps.tag_check.outputs.exists == 'false'
-        run: npm run tauri:build
+        run: pnpm run tauri:build
 
       - name: Create Release
         if: steps.tag_check.outputs.exists == 'false'
