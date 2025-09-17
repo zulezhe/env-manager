@@ -82,9 +82,9 @@ const EnvironmentVariableItem: React.FC<EnvironmentVariableItemProps> = ({
           {variable.isPathParent ? (
             <div className="flex items-center">
               {expandedPathVariables.has(variable.id) ? (
-                <ChevronDown className="h-4 w-4 text-gray-600 transition-transform duration-200" />
-              ) : (
                 <ChevronUp className="h-4 w-4 text-gray-600 transition-transform duration-200" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-600 transition-transform duration-200" />
               )}
             </div>
           ) : (

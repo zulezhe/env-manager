@@ -66,17 +66,17 @@
 
 2. **安装依赖**
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **开发模式运行**
    ```bash
-   npm run tauri dev
+   pnpm tauri dev
    ```
 
 4. **构建生产版本**
    ```bash
-   npm run tauri build
+   pnpm tauri build
    ```
 
 ## 🚀 使用指南

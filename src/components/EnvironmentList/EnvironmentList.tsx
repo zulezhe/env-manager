@@ -14,21 +14,13 @@ import {
 } from '../ui/dialog';
 import { useToast } from '../ui/toast';
 import { invoke } from '@tauri-apps/api/core';
-import { mockInvoke } from '../../utils/mockData';
 
 // 声明全局类型
 
 
 // 直接使用Tauri的invoke函数获取真实环境变量
 const safeInvoke = async (command: string, args?: any) => {
-  try {
-    // 优先使用Tauri的invoke函数
-    return await invoke(command, args);
-  } catch (error) {
-    console.error('Tauri invoke failed, falling back to mock data:', error);
-    // 如果Tauri调用失败，则使用模拟数据作为后备
-    return mockInvoke(command, args);
-  }
+  return await invoke(command, args);
 };
 
 const EnvironmentList: React.FC = () => {

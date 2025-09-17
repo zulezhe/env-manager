@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "identifier": "com.env-manager.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -28,7 +28,6 @@
     "icon": [
       "icons/icon.ico"
     ],
-    "identifier": "com.env-manager.app",
     "publisher": "Environment Manager",
     "category": "Utility",
     "shortDescription": "环境变量管理器",
