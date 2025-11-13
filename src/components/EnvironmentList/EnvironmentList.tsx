@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { EnvironmentVariable } from '../../utils/types';
 import EnvironmentForm from '../EnvironmentForm/EnvironmentForm';
 import EnvironmentListHeader from './EnvironmentListHeader';
@@ -14,6 +14,7 @@ import {
 } from '../ui/dialog';
 import { useToast } from '../ui/toast';
 import { invoke } from '@tauri-apps/api/core';
+import { useEnvStore } from '../../store/envStore';
 
 // 声明全局类型
 
@@ -25,23 +26,36 @@ const safeInvoke = async (command: string, args?: any) => {
 
 const EnvironmentList: React.FC = () => {
   const { addToast } = useToast();
-  const [variables, setVariables] = useState<EnvironmentVariable[]>([]);
-  const [filteredVariables, setFilteredVariables] = useState<EnvironmentVariable[]>([]);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [editingVariable, setEditingVariable] = useState<EnvironmentVariable | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['user', 'system']));
-  const [expandedPathVariables, setExpandedPathVariables] = useState<Set<string>>(new Set());
-  const [invalidVariables, setInvalidVariables] = useState<EnvironmentVariable[]>([]);
-  const [showInvalidDialog, setShowInvalidDialog] = useState(false);
+  const {
+    variables, setVariables, filteredVariables, setFilteredVariables,
+    deleteId, setDeleteId, isLoading, setIsLoading, isValidating, setIsValidating,
+    refreshTrigger, setRefreshTrigger, editingVariable, setEditingVariable,
+    isEditDialogOpen, setIsEditDialogOpen, expandedSections, setExpandedSections,
+    expandedPathVariables, setExpandedPathVariables, invalidVariables, setInvalidVariables,
+    showInvalidDialog, setShowInvalidDialog, loadEnvironmentVariables,
+    toggleSection, togglePathVariable
+  } = useEnvStore();
 
   // 初始加载
   useEffect(() => {
     loadEnvironmentVariables();
   }, []);
+
+  // 当变量加载完成后，自动展开系统PATH变量
+  useEffect(() => {
+    if (variables.length > 0) {
+      const pathVariables = variables.filter(v => isPathVariable(v) && v.type === 'system');
+      if (pathVariables.length > 0) {
+        const newExpanded = new Set(expandedPathVariables);
+        pathVariables.forEach(v => {
+          if (v.name.toUpperCase() === 'PATH') {
+            newExpanded.add(v.id);
+          }
+        });
+        setExpandedPathVariables(newExpanded);
+      }
+    }
+  }, [variables, setExpandedPathVariables]);
 
   const loadEnvironmentVariables = async () => {
     try {
@@ -100,12 +114,14 @@ const EnvironmentList: React.FC = () => {
     }, []);
 
     setFilteredVariables(expandedVariables);
-  }, [variables, expandedPathVariables]);
+  }, [variables, expandedPathVariables, setFilteredVariables]);
 
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
     loadEnvironmentVariables();
   };
+
+  // 从 Zustand Store 中获取 toggleSection 和 togglePathVariable
 
   const handleEdit = (id: string) => {
     // 检查是否是PATH子节点
@@ -286,6 +302,7 @@ const EnvironmentList: React.FC = () => {
   };
 
   const togglePathVariable = (variableId: string) => {
+    console.log('Toggling PATH variable:', variableId, 'Current expanded:', expandedPathVariables.has(variableId));
     const newExpanded = new Set(expandedPathVariables);
     if (newExpanded.has(variableId)) {
       newExpanded.delete(variableId);
@@ -293,6 +310,7 @@ const EnvironmentList: React.FC = () => {
       newExpanded.add(variableId);
     }
     setExpandedPathVariables(newExpanded);
+    console.log('New expanded state:', newExpanded.has(variableId));
   };
 
   const handleBatchDeleteInvalid = async (selectedIds: string[]) => {

@@ -143,9 +143,85 @@ pub async fn add_environment_variable(variable: EnvironmentVariable) -> Result<E
 // 更新环境变量
 #[tauri::command]
 pub async fn update_environment_variable(id: String, variable: EnvironmentVariable) -> Result<EnvironmentVariable, String> {
-    // For simplicity, we'll delete and re-add the variable
-    delete_environment_variable(id.clone()).await?;
-    add_environment_variable(variable).await
+    let parts: Vec<&str> = id.split('_').collect();
+    if parts.len() < 2 {
+        return Err("无效的ID格式".to_string());
+    }
+    
+    let var_type = parts[0];
+    let name = &id[parts[0].len() + 1..];
+    
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    
+    let result = if var_type == "system" {
+        let env_key = hklm.open_subkey_with_flags(
+            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+            KEY_SET_VALUE,
+        );
+        if let Ok(env_key) = env_key {
+            env_key.set_value(name, &variable.value)
+                .map_err(|e| format!("Failed to update system environment variable: {}", e))?;
+            // 通知系统环境变量已更改
+            unsafe {
+                use winapi::um::winuser::{SendMessageTimeoutW, HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG};
+                use winapi::um::winnt::LPCWSTR;
+                use std::ffi::OsStr;
+                use std::os::windows::ffi::OsStrExt;
+                
+                let env_str: Vec<u16> = OsStr::new("Environment")
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect();
+                
+                SendMessageTimeoutW(
+                    HWND_BROADCAST,
+                    WM_SETTINGCHANGE,
+                    0,
+                    env_str.as_ptr() as isize,
+                    SMTO_ABORTIFHUNG,
+                    5000,
+                    std::ptr::null_mut(),
+                );
+            }
+            Ok(variable)
+        } else {
+            Err("Failed to open system environment key".to_string())
+        }
+    } else {
+        let env_key = hkcu.open_subkey_with_flags("Environment", KEY_SET_VALUE);
+        if let Ok(env_key) = env_key {
+            env_key.set_value(name, &variable.value)
+                .map_err(|e| format!("Failed to update user environment variable: {}", e))?;
+            // 通知系统环境变量已更改
+            unsafe {
+                use winapi::um::winuser::{SendMessageTimeoutW, HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG};
+                use winapi::um::winnt::LPCWSTR;
+                use std::ffi::OsStr;
+                use std::os::windows::ffi::OsStrExt;
+                
+                let env_str: Vec<u16> = OsStr::new("Environment")
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect();
+                
+                SendMessageTimeoutW(
+                    HWND_BROADCAST,
+                    WM_SETTINGCHANGE,
+                    0,
+                    env_str.as_ptr() as isize,
+                    SMTO_ABORTIFHUNG,
+                    5000,
+                    std::ptr::null_mut(),
+                );
+            }
+            Ok(variable)
+        } else {
+            Err("Failed to open user environment key".to_string())
+        }
+    };
+    
+    result
 }
 
 // 删除环境变量

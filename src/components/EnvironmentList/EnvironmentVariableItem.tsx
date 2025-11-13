@@ -41,7 +41,11 @@ const EnvironmentVariableItem: React.FC<EnvironmentVariableItemProps> = ({
     >
       <div 
         className={`flex items-center justify-between ${variable.isPathParent ? 'cursor-pointer hover:bg-gray-50 transition-colors duration-200' : ''}`}
-        onClick={variable.isPathParent ? () => onTogglePathVariable(variable.id) : undefined}
+        onClick={variable.isPathParent ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onTogglePathVariable(variable.id);
+        } : undefined}
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center text-sm">
